@@ -40,6 +40,17 @@ class LessionDetailSerializer(LessonSerializer):
         fields = LessonSerializer.Meta.fields + ['content','tags']
 
 
+class AuthenticatedLessonDetailsSerializer(LessionDetailSerializer):
+    liked = serializers.SerializerMethodField()
+
+    def get_liked(self, lesson):
+        return lesson.like_set.filter(active=True).exists()
+
+    class Meta:
+        model = LessionDetailSerializer.Meta.model
+        fields = LessionDetailSerializer.Meta.fields + ['liked']
+
+
 class UserSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         req = super().to_representation(instance)
@@ -63,3 +74,10 @@ class UserSerializer(serializers.ModelSerializer):
                 'write_only': True
             }
         }
+
+class CommentSerializer(serializers.ModelSerializer):
+    user = UserSerializer()
+
+    class Meta:
+        model = Comment
+        fields = ['id', 'content', 'created_date', 'user']

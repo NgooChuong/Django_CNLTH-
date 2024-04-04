@@ -69,3 +69,6 @@ class Like(Interaction):
     class Meta:
         unique_together = ('lesson', 'user')
 
+class Rating(Interaction):
+    class Meta:
+        unique_together = ('lesson', 'user')

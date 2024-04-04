@@ -31,3 +31,6 @@ admin.site.register(Category)
 admin.site.register(Course, MyCourseAdmin)
 admin.site.register(Lesson)
 admin.site.register(Tag)
+admin.site.register(Comment)
+admin.site.register(User)
+

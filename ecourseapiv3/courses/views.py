@@ -1,9 +1,10 @@
 from django.shortcuts import render
-from rest_framework import viewsets, generics,status, parsers
+from rest_framework import viewsets, generics,status, parsers, permissions
 from rest_framework.decorators import action #tao ra 1 api moi
 from rest_framework.response import Response
 from courses.models import *
-from courses import serializers, paginators
+from courses import serializers, paginators, perms
+
 
 
 class CategoryViewSet(viewsets.ViewSet, generics.ListAPIView):
@@ -43,8 +44,65 @@ class LessonViewSet(viewsets.ViewSet, generics.RetrieveAPIView): # RetrieveAPIVi
     queryset = Lesson.objects.prefetch_related('tags').filter(active = True)
     serializer_class = serializers.LessionDetailSerializer
 
+    @action(methods=['get'], url_path='comments', detail=True)
+    def get_comments(self, request, pk):
+        comments = self.get_object().comment_set.select_related('user').all()
+        paginator = paginators.Item_Paginations()
+        page  = paginator.paginate_queryset(comments,request)
+        if page is not None:
+            serializer = serializers.CommentSerializer(page, many= True)
+            return paginator.get_paginated_response(serializer.data)
+        return Response(serializers.CommentSerializer(comments, many=True).data,
+                        status=status.HTTP_200_OK)
+    def get_permissions(self):
+        if self.action in ['create_comments','create_rating']:
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
 
-class UserViewSet(viewsets.ViewSet, generics.CreateAPIView):
+    # @action(methods=['post'], url_path='comments',detail=False)
+    # def create_rating(self,request):
+    #     rate = self.get_object().rating_set.create()
+
+    @action(methods=['post'],url_path='like', detail=True) #tim hieu detail
+    def create_like(self, request, pk):
+        li, created = Like.objects.get_or_create(lesson=self.get_object(),
+                                                 user=request.user)
+        if not created:
+            li.active = not li.active
+            li.save()
+
+        return Response(serializers.AuthenticatedLessonDetailsSerializer(self.get_object()).data)
+
+
+
+    @action(methods=['post'], url_path='comments',detail=True)
+    def create_comments(self, request, pk):
+        user = request.user
+        c = self.get_object().comment_set.create(content = request.data.get('content'),user = user)
+        return Response(serializers.CommentSerializer(c).data, status=status.HTTP_201_CREATED)
+
+
+class UserViewSet(viewsets.ViewSet, generics.CreateAPIView): #viewsets.ModelViewSet: lay tat ca api
     queryset = User.objects.filter(is_active = True)
     serializer_class =  serializers.UserSerializer
     parser_classes = [parsers.MultiPartParser,] # tim hieu
+
+    def get_permissions(self):
+        if self.action in ['get_cur_user']:
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+
+
+    @action(methods=['get', 'patch'], url_path='cur-user',detail=False)
+    def get_cur_user(self, request): #request.user: tra ve user dang dang nhap admin hien tai
+        user = request.user
+        if (request.method.__eq__('PATCH')):
+            for k, v in request.data.items(): #request_data : du lieu can chinh sua
+                setattr(user,k,v) # dong nghia user.k = v
+            user.save()
+        return Response(serializers.UserSerializer(user).data)
+
+class CommentViewSet(viewsets.ViewSet,generics.UpdateAPIView, generics.DestroyAPIView):
+    queryset = Comment.objects.all()
+    serializers_class = serializers.CommentSerializer
+    permission_classes = [perms.CommentOwner]
